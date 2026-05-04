@@ -24,11 +24,19 @@ TRIMET_ARRIVAL_URL = f"https://developer.trimet.org/ws/v2/arrivals?locIDs=423&ap
 ARRIVAL1_ESTIMATED = ["resultSet", "arrival", 0, "estimated"]
 ARRIVAL2_ESTIMATED = ["resultSet", "arrival", 1, "estimated"]
 
-# TODO: estimated is an optional field, so we should fallback to "scheduled" if it's not present. 
-# use json_transform
+# estimated is an optional field, so we should fallback to "scheduled" if it's not present. 
+def handle_optional_estimated(json_data):
+    for arrival in json_data["resultSet"]["arrival"]:
+        if "estimated" in arrival:
+            return arrival["estimated"]
+        else:
+            log("Estimated time not found, falling back to scheduled time.")
+            return arrival["scheduled"]
+
 magtag = MagTag(
     url=TRIMET_ARRIVAL_URL,
     json_path=(ARRIVAL1_ESTIMATED, ARRIVAL2_ESTIMATED),
+    json_transform=handle_optional_estimated,
 )
 
 # Label for Departs
