@@ -28,7 +28,7 @@ magtag = MagTag(
     url=TRIMET_ARRIVAL_URL,
     json_path=(ARRIVAL1_ESTIMATED, ARRIVAL2_ESTIMATED),
 )
-log("reboot")
+log("initializing")
 
 # Label for Departs
 magtag.add_text(
@@ -70,12 +70,11 @@ magtag.set_text("Departs", 0, auto_refresh=False)
 magtag.set_text("Next Departure", 1, auto_refresh=False)
 magtag.set_text("BUS 14", 2, auto_refresh=False)
 
-# Get the current time and calculate the timezone offset for current location
+# Get the current time and calculate the timezone offset for Portland
 magtag.get_local_time()
 local_now = time.time()
 utc_now = int(magtag.network.get_strftime("%s")) # Request raw UTC seconds from server
 timezone_offset_seconds = local_now - utc_now
-print("Calculated timezone offset in seconds:", timezone_offset_seconds)
 
 def format_arrival_time(arrival_ms):
     timestamp_seconds = int(arrival_ms) // 1000
@@ -108,12 +107,11 @@ magtag.add_text(
     text_transform=format_arrival_time,
 )
 
-while(True):
-    try:
-        print("Fetching data from", TRIMET_ARRIVAL_URL)
-        value = magtag.fetch()
-        log(f"Fetched data: {value}")
-    except (ValueError, RuntimeError) as e:
-        log(f"Error fetching data: {e}")
+try:
+    print("Fetching data from", TRIMET_ARRIVAL_URL)
+    value = magtag.fetch()
+    log(f"Fetched data: {value}")
+except (ValueError, RuntimeError) as e:
+    log(f"Error fetching data: {e}")
 
-    magtag.exit_and_deep_sleep(180)
+magtag.exit_and_deep_sleep(180)
