@@ -24,11 +24,12 @@ TRIMET_ARRIVAL_URL = f"https://developer.trimet.org/ws/v2/arrivals?locIDs=423&ap
 ARRIVAL1_ESTIMATED = ["resultSet", "arrival", 0, "estimated"]
 ARRIVAL2_ESTIMATED = ["resultSet", "arrival", 1, "estimated"]
 
+# TODO: estimated is an optional field, so we should fallback to "scheduled" if it's not present. 
+# use json_transform
 magtag = MagTag(
     url=TRIMET_ARRIVAL_URL,
     json_path=(ARRIVAL1_ESTIMATED, ARRIVAL2_ESTIMATED),
 )
-log("initializing")
 
 # Label for Departs
 magtag.add_text(
