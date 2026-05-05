@@ -22,8 +22,6 @@ def log(message):
 
 TRIMET_APP_ID = os.getenv("TRIMET_APP_ID")
 TRIMET_ARRIVAL_URL = f"https://developer.trimet.org/ws/v2/arrivals?locIDs=423&appID={TRIMET_APP_ID}"
-ARRIVAL1_ESTIMATED = ["resultSet", "arrival", 0, "estimated"]
-ARRIVAL2_ESTIMATED = ["resultSet", "arrival", 1, "estimated"]
 
 
 magtag = MagTag(url=TRIMET_ARRIVAL_URL)
