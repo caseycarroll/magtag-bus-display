@@ -1,3 +1,4 @@
+import json
 import os
 import ssl
 import time
@@ -24,20 +25,8 @@ TRIMET_ARRIVAL_URL = f"https://developer.trimet.org/ws/v2/arrivals?locIDs=423&ap
 ARRIVAL1_ESTIMATED = ["resultSet", "arrival", 0, "estimated"]
 ARRIVAL2_ESTIMATED = ["resultSet", "arrival", 1, "estimated"]
 
-# estimated is an optional field, so we should fallback to "scheduled" if it's not present. 
-def handle_optional_estimated(json_data):
-    for arrival in json_data["resultSet"]["arrival"]:
-        if "estimated" in arrival:
-            return arrival["estimated"]
-        else:
-            log("Estimated time not found, falling back to scheduled time.")
-            return arrival["scheduled"]
 
-magtag = MagTag(
-    url=TRIMET_ARRIVAL_URL,
-    json_path=(ARRIVAL1_ESTIMATED, ARRIVAL2_ESTIMATED),
-    json_transform=handle_optional_estimated,
-)
+magtag = MagTag(url=TRIMET_ARRIVAL_URL)
 
 # Label for Departs
 magtag.add_text(
@@ -50,6 +39,7 @@ magtag.add_text(
     text_scale=1.5,
     is_data=False,
 )
+magtag.set_text("Departs", 0, auto_refresh=False)
 
 # Label for Next Departure
 magtag.add_text(
@@ -62,6 +52,7 @@ magtag.add_text(
     text_scale=1,
     is_data=False,
 )
+magtag.set_text("Next Departure", 1, auto_refresh=False)
 
 # Label for Bus Line
 magtag.add_text(
@@ -74,12 +65,29 @@ magtag.add_text(
     text_scale=2,
     is_data=False,
 )
-
-magtag.set_text("Departs", 0, auto_refresh=False)
-magtag.set_text("Next Departure", 1, auto_refresh=False)
 magtag.set_text("BUS 14", 2, auto_refresh=False)
 
-# Get the current time and calculate the timezone offset for Portland
+# Arrival Time Text
+magtag.add_text(
+    text_position=(12, 32),
+    line_spacing=1.0,
+    text_anchor_point=(0, 0),
+    text_scale=4,
+    is_data=False,
+)
+magtag.set_text("--:--", 3, auto_refresh=False)
+
+# Next Departure Time
+magtag.add_text(
+    text_position=(12, magtag.graphics.display.height - 4),
+    line_spacing=1.0,
+    text_anchor_point=(0, 1),
+    text_scale=2,
+    is_data=False,
+)
+magtag.set_text("--:--", 4, auto_refresh=False)
+
+# Get the current time and calculate the timezone offset
 magtag.get_local_time()
 local_now = time.time()
 utc_now = int(magtag.network.get_strftime("%s")) # Request raw UTC seconds from server
@@ -98,28 +106,22 @@ def format_arrival_time(arrival_ms):
 
     return "{}:{:02d}{}".format(hour_12, minute, suffix)
 
-# Arrival Time Text
-magtag.add_text(
-    text_position=(12, 32),
-    line_spacing=1.0,
-    text_anchor_point=(0, 0),
-    text_scale=4,
-    text_transform=format_arrival_time,
-)
-
-# Next Departure Time
-magtag.add_text(
-    text_position=(12, magtag.graphics.display.height - 4),
-    line_spacing=1.0,
-    text_anchor_point=(0, 1),
-    text_scale=2,
-    text_transform=format_arrival_time,
-)
-
 try:
-    print("Fetching data from", TRIMET_ARRIVAL_URL)
-    value = magtag.fetch()
-    log(f"Fetched data: {value}")
+    response = magtag.fetch(auto_refresh=False)
+
+    # With json_path disabled, fetch may return a raw JSON string.
+    data = json.loads(response) if isinstance(response, str) else response
+    arrivals = data.get("resultSet", {}).get("arrival", []) if isinstance(data, dict) else []
+
+    arrivalLogs = []
+    for i in range(2):
+        if i < len(arrivals):
+            arrival_time = format_arrival_time(arrivals[i].get("estimated", arrivals[i].get("scheduled", "")))
+            magtag.set_text(arrival_time, 3 + i, auto_refresh=False)
+            arrivalLogs.append(arrival_time)
+
+    log(f"Fetched arrival times: {', '.join(arrivalLogs)}")
+    magtag.graphics.display.refresh()
 except (ValueError, RuntimeError) as e:
     log(f"Error fetching data: {e}")
 
