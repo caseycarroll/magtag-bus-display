@@ -11,6 +11,8 @@ from adafruit_io.adafruit_io import IO_HTTP
 TRIMET_APP_ID = os.getenv("TRIMET_APP_ID")
 TRIMET_ARRIVAL_URL = f"https://developer.trimet.org/ws/v2/arrivals?locIDs=423&appID={TRIMET_APP_ID}"
 
+magtag = MagTag(url=TRIMET_ARRIVAL_URL)
+
 class Logger:
     def __init__(self):
         aio_username = os.getenv("ADAFRUIT_AIO_USERNAME")
@@ -24,13 +26,17 @@ class Logger:
             print(f"Error initializing IO_HTTP: {e}")
             self.io = None
             self.log_feed = None
+            magtag.exit_and_deep_sleep(30)
+    
     def log(self, message):
         print(message)
         if self.io and self.log_feed:
-            self.io.send_data(self.log_feed["key"], message)
+            try:
+                self.io.send_data(self.log_feed["key"], message)
+            except Exception as e:
+                print(f"Error sending log data: {e}")
 
 logger = Logger()
-magtag = MagTag(url=TRIMET_ARRIVAL_URL)
 
 # Label for Departs
 magtag.add_text(
@@ -92,10 +98,15 @@ magtag.add_text(
 magtag.set_text("--:--", 4, auto_refresh=False)
 
 def get_timezone_offset_seconds():
-    magtag.get_local_time()
-    local_now = time.time()
-    utc_now = int(magtag.network.get_strftime("%s")) # Request raw UTC seconds from server
-    return local_now - utc_now
+    try: 
+        magtag.get_local_time()
+        local_now = time.time()
+        utc_now = int(magtag.network.get_strftime("%s")) # Request raw UTC seconds from server
+        return local_now - utc_now
+    except Exception as e:
+        logger.log(f"Error getting timezone offset: {e}")
+        magtag.exit_and_deep_sleep(30)  # Sleep for 30 seconds before retrying
+        return 0
 
 timezone_offset_seconds = get_timezone_offset_seconds()
 
@@ -128,7 +139,7 @@ def fetch_arrival_times():
 
         logger.log(f"Fetched arrival times: {', '.join(arrivalLogs)}")
         magtag.graphics.display.refresh()
-    except (ValueError, RuntimeError) as e:
+    except Exception as e:
         logger.log(f"Error fetching data: {e}")
 
 
