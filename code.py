@@ -17,11 +17,17 @@ class Logger:
         aio_key = os.getenv("ADAFRUIT_AIO_KEY")
         pool = socketpool.SocketPool(wifi.radio)
         requests = adafruit_requests.Session(pool, ssl.create_default_context())
-        self.io = IO_HTTP(aio_username, aio_key, requests)
-        self.log_feed = self.io.get_feed("magtag-logs")
+        try:
+            self.io = IO_HTTP(aio_username, aio_key, requests)
+            self.log_feed = self.io.get_feed("magtag-logs")
+        except Exception as e:
+            print(f"Error initializing IO_HTTP: {e}")
+            self.io = None
+            self.log_feed = None
     def log(self, message):
         print(message)
-        self.io.send_data(self.log_feed["key"], message)
+        if self.io and self.log_feed:
+            self.io.send_data(self.log_feed["key"], message)
 
 logger = Logger()
 magtag = MagTag(url=TRIMET_ARRIVAL_URL)
@@ -63,7 +69,7 @@ magtag.add_text(
     text_scale=2,
     is_data=False,
 )
-magtag.set_text("BUS 14", 2, auto_refresh=False)
+magtag.set_text("BUS 15", 2, auto_refresh=False)
 
 # Arrival Time Text
 magtag.add_text(
@@ -104,20 +110,28 @@ def format_arrival_time(arrival_ms):
 
     return "{}:{:02d}{}".format(hour_12, minute, suffix)
 
-try:
-    arrivalLogs = []
-    response = magtag.fetch(auto_refresh=False)
-    data = json.loads(response) if isinstance(response, str) else response
-    arrivals = data.get("resultSet", {}).get("arrival", []) if isinstance(data, dict) else []
-    for i in range(2):
-        if i < len(arrivals):
-            arrival_time = format_arrival_time(arrivals[i].get("estimated", arrivals[i].get("scheduled", "")))
-            magtag.set_text(arrival_time, 3 + i, auto_refresh=False)
+
+def fetch_arrival_times():
+    try:
+        arrivalLogs = []
+        response = magtag.fetch(auto_refresh=False)
+        data = json.loads(response) if isinstance(response, str) else response
+        arrivals = data.get("resultSet", {}).get("arrival", []) if isinstance(data, dict) else []
+        # Only render the last two arrivals, oldest to newest.
+        last_two_arrivals = arrivals[-2:]
+        for display_index, arrival in enumerate(last_two_arrivals):
+            print(f"Processing arrival index: {len(arrivals) - len(last_two_arrivals) + display_index}")
+            arrival_ms = arrival.get("estimated", arrival.get("scheduled", ""))
+            arrival_time = format_arrival_time(arrival_ms)
+            magtag.set_text(arrival_time, 3 + display_index, auto_refresh=False)
             arrivalLogs.append(arrival_time)
 
-    logger.log(f"Fetched arrival times: {', '.join(arrivalLogs)}")
-    magtag.graphics.display.refresh()
-except (ValueError, RuntimeError) as e:
-    logger.log(f"Error fetching data: {e}")
+        logger.log(f"Fetched arrival times: {', '.join(arrivalLogs)}")
+        magtag.graphics.display.refresh()
+    except (ValueError, RuntimeError) as e:
+        logger.log(f"Error fetching data: {e}")
 
-magtag.exit_and_deep_sleep(180)
+
+while True:
+    fetch_arrival_times()
+    magtag.enter_light_sleep(300)  # Sleep for 5 minutes (300 seconds)
